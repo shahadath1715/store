@@ -1,0 +1,24 @@
+# permissions for end users to edit abids.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: abid-editor-role
+rules:
+- apiGroups:
+  - cache.example.com
+  resources:
+  - abids
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - cache.example.com
+  resources:
+  - abids/status
+  verbs:
+  - get

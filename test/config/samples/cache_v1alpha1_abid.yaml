@@ -1,0 +1,6 @@
+apiVersion: cache.example.com/v1alpha1
+kind: Abid
+metadata:
+  name: abid-sample
+spec:
+  # TODO(user): Add fields here
