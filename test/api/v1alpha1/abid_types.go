@@ -29,13 +29,14 @@ type AbidSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// Foo is an example field of Abid. Edit abid_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	Size int32 `json:"size"`
 }
 
 // AbidStatus defines the observed state of Abid
 type AbidStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+	Nodes []string `json:"nodes"`
 }
 
 //+kubebuilder:object:root=true

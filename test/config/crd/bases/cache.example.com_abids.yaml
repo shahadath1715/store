@@ -36,13 +36,26 @@ spec:
           spec:
             description: AbidSpec defines the desired state of Abid
             properties:
-              foo:
+              size:
                 description: Foo is an example field of Abid. Edit abid_types.go to
                   remove/update
-                type: string
+                format: int32
+                type: integer
+            required:
+            - size
             type: object
           status:
             description: AbidStatus defines the observed state of Abid
+            properties:
+              nodes:
+                description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
+                  of cluster Important: Run "make" to regenerate code after modifying
+                  this file'
+                items:
+                  type: string
+                type: array
+            required:
+            - nodes
             type: object
         type: object
     served: true
