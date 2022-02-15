@@ -19,14 +19,13 @@ package controllers
 import (
 	"context"
 	"github.com/go-logr/logr"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"reflect"
-
-	appsv1 "k8s.io/api/apps/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -34,95 +33,97 @@ import (
 	cachev1alpha1 "mongo-operator/api/v1alpha1"
 )
 
-// MongoReconciler reconciles a Mongo object
-type MongoReconciler struct {
+// MeRestAPIGoReconciler reconciles a MeRestAPIGo object
+type MeRestAPIGoReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 	Log    logr.Logger
 }
 
-//+kubebuilder:rbac:groups=cache.my.domain,resources=mongoes,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=cache.my.domain,resources=mongoes/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=cache.my.domain,resources=mongoes/finalizers,verbs=update
+//+kubebuilder:rbac:groups=cache.my.domain,resources=merestapigoes,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=cache.my.domain,resources=merestapigoes/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=cache.my.domain,resources=merestapigoes/finalizers,verbs=update
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
 // TODO(user): Modify the Reconcile function to compare the state specified by
-// the Mongo object against the actual cluster state, and then
+// the MeRestAPIGo object against the actual cluster state, and then
 // perform operations to make the cluster state reflect the state specified by
 // the user.
 //
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.10.0/pkg/reconcile
-func (r *MongoReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *MeRestAPIGoReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = log.FromContext(ctx)
 
 	// TODO(user): your logic here
+	r.Log = ctrl.Log.WithValues("RestapiGo", req.NamespacedName)
 
-	r.Log = ctrl.Log.WithValues("mongo", req.NamespacedName)
+	restapigo := &cachev1alpha1.MeRestAPIGo{}
 
-	mongo := &cachev1alpha1.Mongo{}
-
-	err := r.Get(ctx, req.NamespacedName, mongo)
+	err := r.Get(ctx, req.NamespacedName, restapigo)
 
 	if err != nil {
 		if errors.IsNotFound(err) {
-			r.Log.Info("Mongo resource not found. Ignoring since object must be deleted")
+			r.Log.Info("RestAPiGo resource not found. Ignoring since object must be deleted")
 			return ctrl.Result{}, nil
 		}
 
-		r.Log.Error(err, "Failed to get Tamim")
+		r.Log.Error(err, "Failed to get RestapiGO")
 		return ctrl.Result{}, err
 	}
-
-	found := &appsv1.StatefulSet{}
-	err = r.Get(ctx, types.NamespacedName{Name: mongo.Name, Namespace: mongo.Namespace}, found)
+	found := &appsv1.Deployment{}
+	err = r.Get(ctx, types.NamespacedName{Name: restapigo.Name, Namespace: restapigo.Namespace}, found)
 
 	if err != nil && errors.IsNotFound(err) {
-		dep := r.StateFulSetForMongo(mongo)
+		dep := r.deploymentForrestapigo(restapigo)
 
-		r.Log.Error(err, "Failed to create new StateFulSet", "StateFulSet.Namespace", dep.Namespace, "StateFulSet.Name", dep.Name)
+		r.Log.Error(err, "Failed to create new Deployment", "Deployment.Namespace", dep.Namespace, "Deployment.Name", dep.Name)
+
 		err = r.Create(ctx, dep)
 		if err != nil {
-			r.Log.Error(err, "Failed to create new StateFulSet", "StateFulSet.Namespace", dep.Namespace, "StateFulSet.Name", dep.Name)
+			r.Log.Error(err, "Failed to create new Deployment", "Deployment.Namespace", dep.Namespace, "Deployment.Name", dep.Name)
 			return ctrl.Result{}, err
 		}
-		// StateFulSet created successfully - return and requeue
+		// Deployment created successfully - return and requeue
 		return ctrl.Result{Requeue: true}, nil
 	} else if err != nil {
-		r.Log.Error(err, "Failed to get StateFulSet")
+		r.Log.Error(err, "Failed to get Deployment")
 		return ctrl.Result{}, err
 	}
 
-	// Ensure the stateFulSet size is the same as the spec
-	size := mongo.Spec.Size
+	// Ensure the deployment size is the same as the spec
+	size := restapigo.Spec.Size
 	if *found.Spec.Replicas != size {
 		found.Spec.Replicas = &size
 		err = r.Update(ctx, found)
 		if err != nil {
-			r.Log.Error(err, "Failed to update StateFulSet", "StateFulSet.Namespace", found.Namespace, "StateFulSet.Name", found.Name)
+			r.Log.Error(err, "Failed to update Deployment", "Deployment.Namespace", found.Namespace, "Deployment.Name", found.Name)
 			return ctrl.Result{}, err
 		}
 		// Spec updated - return and requeue
 		return ctrl.Result{Requeue: true}, nil
 	}
 
+	// Update the Memcached status with the pod names
+	// List the pods for this memcached's deployment
 	podList := &corev1.PodList{}
 	listOpts := []client.ListOption{
-		client.InNamespace(mongo.Namespace),
-		client.MatchingLabels(labelsForMongo(mongo.Name)),
+		client.InNamespace(restapigo.Namespace),
+		client.MatchingLabels(labelsForrestapigo(restapigo.Name)),
 	}
 	if err = r.List(ctx, podList, listOpts...); err != nil {
-		r.Log.Error(err, "Failed to list pods", "Tamim.Namespace", mongo.Namespace, "Tamim.Name", mongo.Name)
+		r.Log.Error(err, "Failed to list pods", "restapigo.Namespace", restapigo.Namespace, "restapigo.Name", restapigo.Name)
 		return ctrl.Result{}, err
 	}
-	podNames := getPodNames(podList.Items)
+	podNames := getPodNames1(podList.Items)
+
 	// Update status.Nodes if needed
-	if !reflect.DeepEqual(podNames, mongo.Status.Nodes) {
-		mongo.Status.Nodes = podNames
-		err := r.Status().Update(ctx, mongo)
+	if !reflect.DeepEqual(podNames, restapigo.Status.Nodes) {
+		restapigo.Status.Nodes = podNames
+		err := r.Status().Update(ctx, restapigo)
 		if err != nil {
-			r.Log.Error(err, "Failed to update Memcached status")
+			r.Log.Error(err, "Failed to update restapigo status")
 			return ctrl.Result{}, err
 		}
 	}
@@ -130,18 +131,17 @@ func (r *MongoReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	return ctrl.Result{}, nil
 }
 
-// StateFulSet returns a Mongo StateFulSet  object
-
-func (r *MongoReconciler) StateFulSetForMongo(m *cachev1alpha1.Mongo) *appsv1.StatefulSet {
-	ls := labelsForMongo(m.Name)
+// deploymentForTamim returns a memcached Deployment object
+func (r *MeRestAPIGoReconciler) deploymentForrestapigo(m *cachev1alpha1.MeRestAPIGo) *appsv1.Deployment {
+	ls := labelsForrestapigo(m.Name)
 	replicas := m.Spec.Size
 
-	dep := &appsv1.StatefulSet{
+	dep := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      m.Name,
 			Namespace: m.Namespace,
 		},
-		Spec: appsv1.StatefulSetSpec{
+		Spec: appsv1.DeploymentSpec{
 			Replicas: &replicas,
 			Selector: &metav1.LabelSelector{
 				MatchLabels: ls,
@@ -152,21 +152,13 @@ func (r *MongoReconciler) StateFulSetForMongo(m *cachev1alpha1.Mongo) *appsv1.St
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{{
-						Image: "mongo",
-						Name:  "mongo",
+						Image: "tamim447/restapigo",
+						Name:  "customer",
 						//Command: []string{"customer", "-m=64", "-o", "modern", "-v"},
 						Ports: []corev1.ContainerPort{{
-							ContainerPort: 27017,
-							Name:          "mongo",
+							ContainerPort: 8080,
+							Name:          "customer",
 						}},
-						Env: []corev1.EnvVar{{
-							Name:  "MONGO_INITDB_ROOT_USERNAME",
-							Value: "mongoadmin",
-						},
-							{
-								Name:  "MONGO_INITDB_ROOT_PASSWORD",
-								Value: "abc123",
-							}},
 					}},
 				},
 			},
@@ -177,12 +169,12 @@ func (r *MongoReconciler) StateFulSetForMongo(m *cachev1alpha1.Mongo) *appsv1.St
 	return dep
 }
 
-func labelsForMongo(name string) map[string]string {
-	return map[string]string{"app": "mongo"}
+func labelsForrestapigo(name string) map[string]string {
+	return map[string]string{"app": "restapi", "restapi_cr": name}
 }
 
 // getPodNames returns the pod names of the array of pods passed in
-func getPodNames(pods []corev1.Pod) []string {
+func getPodNames1(pods []corev1.Pod) []string {
 	var podNames []string
 	for _, pod := range pods {
 		podNames = append(podNames, pod.Name)
@@ -191,9 +183,9 @@ func getPodNames(pods []corev1.Pod) []string {
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *MongoReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *MeRestAPIGoReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&cachev1alpha1.Mongo{}).
-		Owns(&appsv1.StatefulSet{}).
+		For(&cachev1alpha1.MeRestAPIGo{}).
+		Owns(&appsv1.Deployment{}).
 		Complete(r)
 }

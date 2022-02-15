@@ -2,4 +2,5 @@
 resources:
 - cache_v1alpha1_mongo.yaml
 - cache_v1alpha1_mongoservice.yaml
+- cache_v1alpha1_merestapigo.yaml
 #+kubebuilder:scaffold:manifestskustomizesamples
